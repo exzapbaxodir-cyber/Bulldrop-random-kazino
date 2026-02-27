@@ -1,68 +1,83 @@
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
-from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
-from config import TOKEN, ADMIN_ID, DAILY_BONUS
-from database import add_user, get_user, add_free, add_paid
-from games import generate_ladder
-from datetime import datetime
+from telegram import Update
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    add_user(user_id)
+TOKEN = "8692829092:AAEzIExDusdb7PpDOy04bTspAFQnsS5v2l8"
 
-    keyboard = [
-        [InlineKeyboardButton("🎮 O'yinlar", callback_data="games")],
-        [InlineKeyboardButton("💰 Balans", callback_data="balance")],
-        [InlineKeyboardButton("🎁 Daily Bonus", callback_data="bonus")]
-    ]
+ADMIN_ID = 8505635688  # o'z telegram id'ingni yoz
 
-    await update.message.reply_text(
-        "Xush kelibsiz diqqat❗ bu bot o'zini omadiga ishonmaydigalar uchun 💯% random bot",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
+# ---------- PROMO LOAD ----------
+def load_promos():
+    promos = {}
+    try:
+        with open("promo.txt", "r") as f:
+            for line in f:
+                code, amount, used = line.strip().split(":")
+                used_list = used.split(",") if used else []
+                promos[code] = {
+                    "amount": int(amount),
+                    "used": used_list
+                }
+    except:
+        pass
+    return promos
 
-async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
+# ---------- SAVE PROMO ----------
+def save_promos(promos):
+    with open("promo.txt", "w") as f:
+        for code in promos:
+            used_ids = ",".join(promos[code]["used"])
+            f.write(f"{code}:{promos[code]['amount']}:{used_ids}\n")
 
-    user_id = query.from_user.id
+# ---------- CREATE PROMO (ADMIN) ----------
+async def createpromo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return
 
-    if query.data == "balance":
-        user = get_user(user_id)
-        await query.edit_message_text(
-            f"Free: {user[0]}\nPaid: {user[1]}"
-        )
+    try:
+        code = context.args[0]
+        amount = int(context.args[1])
+    except:
+        await update.message.reply_text("Format: /createpromo KOD 100")
+        return
 
-    if query.data == "games":
-        keyboard = [
-            [InlineKeyboardButton("🪜 Narvon (Free)", callback_data="ladder_free")],
-            [InlineKeyboardButton("🪜 Narvon (Paid)", callback_data="ladder_paid")]
-        ]
-        await query.edit_message_text("O'yinni tanlang", reply_markup=InlineKeyboardMarkup(keyboard))
+    promos = load_promos()
+    promos[code] = {"amount": amount, "used": []}
+    save_promos(promos)
 
-    if query.data == "ladder_free":
-        row1, row2 = generate_ladder()
-        text = "".join(row1) + "\n" + "".join(row2)
-        await query.edit_message_text(f"FREE MODE\n{text}")
+    await update.message.reply_text(f"Promo yaratildi ✅\nKod: {code}\nCoin: {amount}")
 
-    if query.data == "ladder_paid":
-        row1, row2 = generate_ladder()
-        text = "".join(row1) + "\n" + "".join(row2)
-        await query.edit_message_text(f"💎 PAID MODE 💎\n{text}")
+# ---------- USE PROMO ----------
+async def promo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        user_code = context.args[0]
+    except:
+        await update.message.reply_text("Format: /promo KOD")
+        return
 
-    if query.data == "bonus":
-        user = get_user(user_id)
-        today = datetime.now().date()
+    user_id = str(update.effective_user.id)
+    promos = load_promos()
 
-        if user[2] == str(today):
-            await query.edit_message_text("Bugun bonus olgansiz")
-            return
+    if user_code not in promos:
+        await update.message.reply_text("Promo topilmadi ❌")
+        return
 
-        add_free(user_id, DAILY_BONUS)
-        await query.edit_message_text(f"{DAILY_BONUS} coin berildi!")
+    if user_id in promos[user_code]["used"]:
+        await update.message.reply_text("Siz bu promoni ishlatgansiz ❌")
+        return
 
+    amount = promos[user_code]["amount"]
+
+    # BU YERDA FOYDALANUVCHIGA COIN QO'SHISH KODINI YOZASAN
+
+    promos[user_code]["used"].append(user_id)
+    save_promos(promos)
+
+    await update.message.reply_text(f"Siz {amount} coin oldingiz 🎉")
+
+# ---------- BOT START ----------
 app = ApplicationBuilder().token(TOKEN).build()
-app.add_handler(CommandHandler("start", start))
-app.add_handler(CallbackQueryHandler(button))
 
-print("Bot ishga tushdi")
+app.add_handler(CommandHandler("createpromo", createpromo))
+app.add_handler(CommandHandler("promo", promo))
+
 app.run_polling()
