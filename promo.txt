@@ -1,5 +1,6 @@
-WELCOME:100:0
-BONUS50:50:0
-ALISHER200:200:0
-sapyor:10:0
-bulldrop:100:0
+WELCOME:10:
+BONUS10:10:
+ALISHER200:20:
+sapyor:10:
+bulldrop:20:
+ramazon:50:
