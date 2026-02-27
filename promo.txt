@@ -1,0 +1,5 @@
+WELCOME:100
+BONUS50:50
+ALISHER200:200
+sapyor:10
+bulldrop:100
